@@ -1,0 +1,15 @@
+[project]
+name = "llm-tools-capture-screen"
+version = "0.1.0"
+description = "LLM tool for capturing screenshots using maim"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "GPL-3.0"}
+dependencies = ["llm"]
+
+[project.entry-points.llm]
+capture_screen = "llm_tools_capture_screen"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

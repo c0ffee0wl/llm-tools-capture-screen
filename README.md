@@ -1,0 +1,47 @@
+# llm-tools-capture-screen
+
+LLM tool for capturing screenshots using maim on X11-based Linux systems.
+
+## Installation
+
+```bash
+# Install system dependencies
+sudo apt install maim xdotool
+
+# Install the plugin
+llm install /opt/llm-tools-capture-screen
+```
+
+## Usage
+
+### Standalone with llm
+
+```bash
+# Full screen capture
+llm -T capture_screen "describe what's on my screen"
+
+# Window selection (click to select)
+llm --tool capture_screen '{"mode":"window"}' "what app is this?"
+
+# Interactive chat with screenshot capability
+llm chat -T capture_screen
+```
+
+### With llm-sidechat
+
+The tool is automatically discovered when installed. The AI can call `capture_screen` during conversations.
+
+## Modes
+
+- `mode="full"` (default): Captures the entire screen (all monitors)
+- `mode="window"`: Shows crosshair cursor, click to select a window to capture
+
+## Requirements
+
+- X11 display server (XFCE, GNOME on X11, KDE on X11, etc.)
+- `maim` - screenshot utility
+- `xdotool` - X11 automation (for window selection)
+
+## License
+
+GPL-3.0
