@@ -20,7 +20,7 @@ def _check_dependencies() -> Optional[str]:
     return None
 
 
-def _capture_full_screen(output_path: str, delay: int = 5, timeout: int = 15) -> Optional[str]:
+def _capture_full_screen(output_path: str, delay: int = 5, timeout: int = 10) -> Optional[str]:
     """Capture entire screen. Returns error message or None on success."""
     try:
         if delay > 0:
@@ -45,6 +45,10 @@ def _capture_window(output_path: str, delay: int = 5, timeout: int = 30) -> Opti
         return "xdotool not installed. Install with: sudo apt install xdotool"
 
     try:
+        # Delay before showing selection cursor
+        if delay > 0:
+            time.sleep(delay)
+
         # Let user click to select a window (cursor changes to crosshair)
         window_result = subprocess.run(
             ['xdotool', 'selectwindow'],
@@ -56,13 +60,11 @@ def _capture_window(output_path: str, delay: int = 5, timeout: int = 30) -> Opti
 
         window_id = window_result.stdout.decode().strip()
 
-        # Capture that window with delay
-        if delay > 0:
-            time.sleep(delay)
+        # Capture that window
         result = subprocess.run(
             ['maim', '-i', window_id, output_path],
             capture_output=True,
-            timeout=15
+            timeout=10
         )
         if result.returncode != 0:
             return result.stderr.decode().strip() or "maim window capture failed"
@@ -77,6 +79,10 @@ def _capture_window(output_path: str, delay: int = 5, timeout: int = 30) -> Opti
 def capture_screen(mode: str = "window", delay: int = 5) -> llm.ToolOutput:
     """Capture a screenshot of a selected window or the entire screen.
 
+ALWAYS use mode="window" unless the user explicitly says "entire screen" or "full screen".
+Window mode lets the user click to select exactly which window to capture, which is
+almost always what users want.
+
 USE when the user asks to:
 - See what's on their screen
 - Capture a screenshot of a window or application
@@ -89,12 +95,10 @@ DO NOT use for:
 - Headless/SSH environments (requires display)
 
 Args:
-    mode: Capture mode:
-          - "window" (default): Click to select a window (crosshair cursor appears)
-          - "full": Entire screen (all monitors)
-    delay: Seconds to wait before capturing (default 5, min 2, max 60). Useful for:
-           - Giving user time to arrange windows or open menus
-           - Capturing hover states, tooltips, or dropdown menus
+    mode: Capture mode - PREFER "window" over "full":
+          - "window" (default, recommended): User clicks to select a window
+          - "full": Entire screen - only use if user explicitly requests it
+    delay: Seconds to wait before capturing (default 5, min 2, max 30).
 
 Returns:
     ToolOutput with the screenshot as an attachment.
@@ -104,8 +108,8 @@ Returns:
     if dep_error:
         raise Exception(dep_error)
 
-    # Validate delay (min 2s, max 60s)
-    delay = max(2, min(int(delay), 60))
+    # Validate delay (min 2s, max 30s)
+    delay = max(2, min(int(delay), 30))
 
     # Validate mode
     if mode not in ("full", "window"):

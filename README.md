@@ -39,7 +39,7 @@ The tool is automatically discovered when installed. The AI can call `capture_sc
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `mode` | string | `"window"` | Capture mode: `"window"` (click to select) or `"full"` (entire screen) |
-| `delay` | int | `5` | Seconds to wait before capturing (2-60). Useful for arranging windows or capturing menus |
+| `delay` | int | `5` | Seconds to wait before capturing (2-30). Useful for arranging windows or capturing menus |
 
 ### Modes
 
