@@ -20,7 +20,7 @@ def _check_dependencies() -> Optional[str]:
     return None
 
 
-def _capture_full_screen(output_path: str, delay: int = 5, timeout: int = 10) -> Optional[str]:
+def _capture_full_screen(output_path: str, delay: int = 5, timeout: int = 15) -> Optional[str]:
     """Capture entire screen. Returns error message or None on success."""
     try:
         if delay > 0:
@@ -62,7 +62,7 @@ def _capture_window(output_path: str, delay: int = 5, timeout: int = 30) -> Opti
         result = subprocess.run(
             ['maim', '-i', window_id, output_path],
             capture_output=True,
-            timeout=10
+            timeout=15
         )
         if result.returncode != 0:
             return result.stderr.decode().strip() or "maim window capture failed"
@@ -74,12 +74,12 @@ def _capture_window(output_path: str, delay: int = 5, timeout: int = 30) -> Opti
         return str(e)
 
 
-def capture_screen(mode: str = "full", delay: int = 5) -> llm.ToolOutput:
-    """Capture a screenshot of the screen or a selected window.
+def capture_screen(mode: str = "window", delay: int = 5) -> llm.ToolOutput:
+    """Capture a screenshot of a selected window or the entire screen.
 
 USE when the user asks to:
 - See what's on their screen
-- Capture a screenshot of the desktop
+- Capture a screenshot of a window or application
 - Show a specific window or application
 - Analyze visual content on the display
 
@@ -90,9 +90,9 @@ DO NOT use for:
 
 Args:
     mode: Capture mode:
+          - "window" (default): Click to select a window (crosshair cursor appears)
           - "full": Entire screen (all monitors)
-          - "window": Click to select a window (crosshair cursor appears)
-    delay: Seconds to wait before capturing (default 5, max 60). Useful for:
+    delay: Seconds to wait before capturing (default 5, min 2, max 60). Useful for:
            - Giving user time to arrange windows or open menus
            - Capturing hover states, tooltips, or dropdown menus
 
@@ -104,12 +104,12 @@ Returns:
     if dep_error:
         raise Exception(dep_error)
 
-    # Validate delay (must be non-negative, cap at 60s)
-    delay = max(0, min(int(delay), 60))
+    # Validate delay (min 2s, max 60s)
+    delay = max(2, min(int(delay), 60))
 
     # Validate mode
     if mode not in ("full", "window"):
-        mode = "full"
+        mode = "window"
 
     # Create temp file
     temp_fd, temp_path = tempfile.mkstemp(suffix='.png', prefix='llm_screenshot_')
