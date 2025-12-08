@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from typing import Optional
 
 import llm
@@ -19,13 +20,15 @@ def _check_dependencies() -> Optional[str]:
     return None
 
 
-def _capture_full_screen(output_path: str, delay: int = 5, timeout: int = 15) -> Optional[str]:
+def _capture_full_screen(output_path: str, delay: int = 5, timeout: int = 10) -> Optional[str]:
     """Capture entire screen. Returns error message or None on success."""
     try:
+        if delay > 0:
+            time.sleep(delay)
         result = subprocess.run(
-            ['maim', '-d', str(delay), output_path],
+            ['maim', output_path],
             capture_output=True,
-            timeout=timeout + delay
+            timeout=timeout
         )
         if result.returncode != 0:
             return result.stderr.decode().strip() or "maim capture failed"
@@ -54,10 +57,12 @@ def _capture_window(output_path: str, delay: int = 5, timeout: int = 30) -> Opti
         window_id = window_result.stdout.decode().strip()
 
         # Capture that window with delay
+        if delay > 0:
+            time.sleep(delay)
         result = subprocess.run(
-            ['maim', '-i', window_id, '-d', str(delay), output_path],
+            ['maim', '-i', window_id, output_path],
             capture_output=True,
-            timeout=15 + delay
+            timeout=10
         )
         if result.returncode != 0:
             return result.stderr.decode().strip() or "maim window capture failed"
@@ -90,7 +95,6 @@ Args:
     delay: Seconds to wait before capturing (default 5, max 60). Useful for:
            - Giving user time to arrange windows or open menus
            - Capturing hover states, tooltips, or dropdown menus
-           - Use 0 for immediate capture, lower values (1-2) for quick captures
 
 Returns:
     ToolOutput with the screenshot as an attachment.

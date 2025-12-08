@@ -23,9 +23,6 @@ llm -T capture_screen "describe what's on my screen"
 # Window selection (click to select)
 llm --tool capture_screen '{"mode":"window"}' "what app is this?"
 
-# Quick capture with shorter delay
-llm --tool capture_screen '{"delay": 2}' "quick screenshot"
-
 # Longer delay to arrange windows or open menus
 llm --tool capture_screen '{"delay": 10}' "capture after I open the menu"
 
