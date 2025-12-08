@@ -108,8 +108,9 @@ Returns:
     if dep_error:
         raise Exception(dep_error)
 
-    # Validate delay (min 2s, max 30s)
-    delay = max(2, min(int(delay), 30))
+    # Validate delay (max 30s). Min 0 allowed for callers that handle delay themselves
+    # (e.g., llm-sidechat shows countdown then passes delay=0). LLM should use min 2.
+    delay = max(0, min(int(delay), 30))
 
     # Validate mode
     if mode not in ("full", "window"):
