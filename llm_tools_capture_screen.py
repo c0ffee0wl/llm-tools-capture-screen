@@ -19,13 +19,13 @@ def _check_dependencies() -> Optional[str]:
     return None
 
 
-def _capture_full_screen(output_path: str, timeout: int = 10) -> Optional[str]:
+def _capture_full_screen(output_path: str, delay: int = 5, timeout: int = 15) -> Optional[str]:
     """Capture entire screen. Returns error message or None on success."""
     try:
         result = subprocess.run(
-            ['maim', output_path],
+            ['maim', '-d', str(delay), output_path],
             capture_output=True,
-            timeout=timeout
+            timeout=timeout + delay
         )
         if result.returncode != 0:
             return result.stderr.decode().strip() or "maim capture failed"
@@ -36,7 +36,7 @@ def _capture_full_screen(output_path: str, timeout: int = 10) -> Optional[str]:
         return str(e)
 
 
-def _capture_window(output_path: str, timeout: int = 30) -> Optional[str]:
+def _capture_window(output_path: str, delay: int = 5, timeout: int = 30) -> Optional[str]:
     """Capture user-selected window (click to select). Returns error message or None on success."""
     if not shutil.which('xdotool'):
         return "xdotool not installed. Install with: sudo apt install xdotool"
@@ -53,11 +53,11 @@ def _capture_window(output_path: str, timeout: int = 30) -> Optional[str]:
 
         window_id = window_result.stdout.decode().strip()
 
-        # Capture that window
+        # Capture that window with delay
         result = subprocess.run(
-            ['maim', '-i', window_id, output_path],
+            ['maim', '-i', window_id, '-d', str(delay), output_path],
             capture_output=True,
-            timeout=10
+            timeout=15 + delay
         )
         if result.returncode != 0:
             return result.stderr.decode().strip() or "maim window capture failed"
@@ -69,7 +69,7 @@ def _capture_window(output_path: str, timeout: int = 30) -> Optional[str]:
         return str(e)
 
 
-def capture_screen(mode: str = "full") -> llm.ToolOutput:
+def capture_screen(mode: str = "full", delay: int = 5) -> llm.ToolOutput:
     """Capture a screenshot of the screen or a selected window.
 
 USE when the user asks to:
@@ -87,6 +87,10 @@ Args:
     mode: Capture mode:
           - "full": Entire screen (all monitors)
           - "window": Click to select a window (crosshair cursor appears)
+    delay: Seconds to wait before capturing (default 5, max 60). Useful for:
+           - Giving user time to arrange windows or open menus
+           - Capturing hover states, tooltips, or dropdown menus
+           - Use 0 for immediate capture, lower values (1-2) for quick captures
 
 Returns:
     ToolOutput with the screenshot as an attachment.
@@ -95,6 +99,9 @@ Returns:
     dep_error = _check_dependencies()
     if dep_error:
         raise Exception(dep_error)
+
+    # Validate delay (must be non-negative, cap at 60s)
+    delay = max(0, min(int(delay), 60))
 
     # Validate mode
     if mode not in ("full", "window"):
@@ -107,9 +114,9 @@ Returns:
     try:
         # Capture based on mode
         if mode == "window":
-            error = _capture_window(temp_path)
+            error = _capture_window(temp_path, delay=delay)
         else:
-            error = _capture_full_screen(temp_path)
+            error = _capture_full_screen(temp_path, delay=delay)
 
         if error:
             os.unlink(temp_path)
@@ -122,7 +129,7 @@ Returns:
             raise Exception("Screenshot file empty or not created")
 
         return llm.ToolOutput(
-            output=f"Screenshot captured ({mode} mode)",
+            output=f"Screenshot captured ({mode} mode, {delay}s delay)",
             attachments=[llm.Attachment(path=temp_path, type="image/png")]
         )
 
