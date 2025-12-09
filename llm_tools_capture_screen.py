@@ -34,7 +34,7 @@ def _capture_full_screen(output_path: str, delay: int = 5, timeout: int = 10) ->
             return result.stderr.decode().strip() or "maim capture failed"
         return None
     except subprocess.TimeoutExpired:
-        return "Screenshot timed out"
+        return f"Screenshot timed out ({timeout}s)"
     except Exception as e:
         return str(e)
 
@@ -245,11 +245,14 @@ def _capture_app(
         return str(e)
 
 
-def _capture_rdp(output_path: str, delay: int = 0, restore: str = "focus") -> Optional[str]:
+def _capture_rdp(output_path: str, restore: str = "focus") -> Optional[str]:
     """Capture Windows desktop via FreeRDP window automatically.
 
     Convenience wrapper around _capture_app for FreeRDP/Windows RDP sessions.
     If multiple RDP sessions exist, returns error with list of available sessions.
+
+    No delay parameter - RDP capture is fully automatic with no user interaction,
+    so delay would only slow things down unnecessarily.
     """
     if not shutil.which('xdotool'):
         return "xdotool not installed. Install with: sudo apt install xdotool"
@@ -295,11 +298,10 @@ def _capture_rdp(output_path: str, delay: int = 0, restore: str = "focus") -> Op
     except Exception as e:
         return f"Error searching for FreeRDP windows: {e}"
 
-    # Exactly one session - proceed with capture
+    # Exactly one session - proceed with capture (delay=0 default, no waiting for automatic capture)
     error = _capture_app(
         output_path=output_path,
         app_pattern='FreeRDP',
-        delay=delay,
         restore=restore,
         search_by='name'
     )
@@ -342,6 +344,7 @@ Args:
             Best when user wants to mark up, explain, or emphasize something visually.
           - "full": Entire screen - only use if user explicitly requests it
     delay: Seconds to wait before capturing (default 5, min 0, max 30).
+          Ignored for "rdp" mode (automatic capture has no delay).
     restore: For "rdp" mode only - how to handle focus after capture:
           - "focus" (default): Return focus to the original window
           - "lower": Push RDP window behind other windows
@@ -379,7 +382,7 @@ Returns:
         if mode == "window":
             error = _capture_window(temp_path, delay=delay)
         elif mode == "rdp":
-            error = _capture_rdp(temp_path, delay=delay, restore=restore)
+            error = _capture_rdp(temp_path, restore=restore)
         elif mode == "region":
             error = _capture_region(temp_path, delay=delay)
         elif mode == "annotate":
@@ -397,8 +400,13 @@ Returns:
                 os.unlink(temp_path)
             raise Exception("Screenshot file empty or not created")
 
+        if mode == "rdp":
+            output_msg = "Screenshot captured (rdp mode, automatic)"
+        else:
+            output_msg = f"Screenshot captured ({mode} mode, {delay}s delay)"
+
         return llm.ToolOutput(
-            output=f"Screenshot captured ({mode} mode, {delay}s delay)",
+            output=output_msg,
             attachments=[llm.Attachment(path=temp_path, type="image/png")]
         )
 
