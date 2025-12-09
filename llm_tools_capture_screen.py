@@ -78,6 +78,32 @@ def _capture_window(output_path: str, delay: int = 5, timeout: int = 30) -> Opti
         return str(e)
 
 
+def _run_flameshot(output_path: str, flameshot_args: list, timeout: int) -> Optional[str]:
+    """Run flameshot and move the saved file to output_path. Returns error or None."""
+    temp_dir = tempfile.mkdtemp(prefix='llm_flameshot_')
+    try:
+        result = subprocess.run(
+            ['flameshot', 'gui'] + flameshot_args + ['--path', temp_dir],
+            capture_output=True,
+            timeout=timeout
+        )
+        if result.returncode != 0:
+            return result.stderr.decode().strip() or "flameshot capture failed or cancelled"
+
+        # Find the saved file (flameshot generates its own filename)
+        saved_files = [f for f in os.listdir(temp_dir) if f.endswith('.png')]
+        if not saved_files:
+            return "flameshot did not save a file (capture cancelled?)"
+
+        # Move the file to the expected output path (remove pre-created empty file first)
+        if os.path.exists(output_path):
+            os.unlink(output_path)
+        shutil.move(os.path.join(temp_dir, saved_files[0]), output_path)
+        return None
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def _capture_region(output_path: str, delay: int = 5, timeout: int = 30) -> Optional[str]:
     """Capture user-selected region (draw rectangle to capture). Returns error or None."""
     if not shutil.which('flameshot'):
@@ -87,22 +113,8 @@ def _capture_region(output_path: str, delay: int = 5, timeout: int = 30) -> Opti
         if delay > 0:
             time.sleep(delay)
 
-        # Remove pre-created empty file - flameshot won't overwrite existing files
-        # (it appends _1 suffix instead), so we must ensure path doesn't exist
-        if os.path.exists(output_path):
-            os.unlink(output_path)
-
         print(f"\033[33mDraw rectangle to select region ({timeout}s timeout)\033[0m", flush=True)
-
-        # --accept-on-select: capture immediately after drawing rectangle (no annotation GUI)
-        result = subprocess.run(
-            ['flameshot', 'gui', '--accept-on-select', '--path', output_path],
-            capture_output=True,
-            timeout=timeout
-        )
-        if result.returncode != 0:
-            return result.stderr.decode().strip() or "flameshot region capture failed or cancelled"
-        return None
+        return _run_flameshot(output_path, ['--accept-on-select'], timeout)
     except subprocess.TimeoutExpired:
         return f"Region capture timed out ({timeout}s)"
     except Exception as e:
@@ -118,23 +130,9 @@ def _capture_annotate(output_path: str, delay: int = 5, timeout: int = 300) -> O
         if delay > 0:
             time.sleep(delay)
 
-        # Remove pre-created empty file - flameshot won't overwrite existing files
-        # (it appends _1 suffix instead), so we must ensure path doesn't exist
-        if os.path.exists(output_path):
-            os.unlink(output_path)
-
         timeout_min = timeout // 60
         print(f"\033[33mDraw rectangle, annotate, then click Accept ({timeout_min} min timeout)\033[0m", flush=True)
-
-        # Full flameshot GUI: user draws rectangle, can annotate, then clicks Accept
-        result = subprocess.run(
-            ['flameshot', 'gui', '--path', output_path],
-            capture_output=True,
-            timeout=timeout  # Longer timeout for annotation
-        )
-        if result.returncode != 0:
-            return result.stderr.decode().strip() or "flameshot capture failed or cancelled"
-        return None
+        return _run_flameshot(output_path, [], timeout)
     except subprocess.TimeoutExpired:
         return f"Annotation capture timed out ({timeout}s)"
     except Exception as e:
