@@ -79,29 +79,23 @@ def _capture_window(output_path: str, delay: int = 5, timeout: int = 30) -> Opti
 
 
 def _run_flameshot(output_path: str, flameshot_args: list, timeout: int) -> Optional[str]:
-    """Run flameshot and move the saved file to output_path. Returns error or None."""
-    temp_dir = tempfile.mkdtemp(prefix='llm_flameshot_')
-    try:
-        result = subprocess.run(
-            ['flameshot', 'gui'] + flameshot_args + ['--path', temp_dir],
-            capture_output=True,
-            timeout=timeout
-        )
-        if result.returncode != 0:
-            return result.stderr.decode().strip() or "flameshot capture failed or cancelled"
+    """Run flameshot to save directly to output_path. Returns error or None."""
+    # Remove pre-created empty file (flameshot needs to create it)
+    if os.path.exists(output_path):
+        os.unlink(output_path)
 
-        # Find the saved file (flameshot generates its own filename)
-        saved_files = [f for f in os.listdir(temp_dir) if f.endswith('.png')]
-        if not saved_files:
-            return "flameshot did not save a file (capture cancelled?)"
+    result = subprocess.run(
+        ['flameshot', 'gui'] + flameshot_args + ['--path', output_path],
+        capture_output=True,
+        timeout=timeout
+    )
+    if result.returncode != 0:
+        return result.stderr.decode().strip() or "flameshot capture failed or cancelled"
 
-        # Move the file to the expected output path (remove pre-created empty file first)
-        if os.path.exists(output_path):
-            os.unlink(output_path)
-        shutil.move(os.path.join(temp_dir, saved_files[0]), output_path)
-        return None
-    finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+    if not os.path.exists(output_path):
+        return "flameshot did not save a file (capture cancelled?)"
+
+    return None
 
 
 def _capture_region(output_path: str, delay: int = 5, timeout: int = 30) -> Optional[str]:
@@ -398,13 +392,16 @@ Returns:
                 os.unlink(temp_path)
             raise Exception("Screenshot file empty or not created")
 
-        if mode == "rdp":
-            output_msg = "Screenshot captured (rdp mode, automatic)"
-        else:
-            output_msg = f"Screenshot captured ({mode} mode, {delay}s delay)"
+        result = {
+            "status": "captured",
+            "mode": mode,
+            "path": temp_path
+        }
+        if mode != "rdp":
+            result["delay"] = delay
 
         return llm.ToolOutput(
-            output=output_msg,
+            output=result,
             attachments=[llm.Attachment(path=temp_path, type="image/png")]
         )
 
