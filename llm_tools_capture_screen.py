@@ -301,50 +301,28 @@ def _capture_rdp(output_path: str, restore: str = "focus") -> Optional[str]:
 
 
 def capture_screen(mode: str = "window", delay: int = 5, restore: str = "focus") -> llm.ToolOutput:
-    """Capture a screenshot of a window, region, or screen. Supports annotation/drawing.
+    """
+    Capture a screenshot of a window, region, or screen. Supports annotation/drawing.
 
-ALWAYS use mode="window" unless the user explicitly requests something different:
-- Use "rdp" when user wants to capture the FreeRDP/RDP window automatically (no clicking)
-- Use "region" when user wants to capture just a portion/area of the screen
-- Use "annotate" when user wants to draw, highlight, add arrows/text, or mark up a screenshot
-- Use "full" only when user explicitly says "entire screen" or "full screen"
+    Args:
+        mode: Capture mode:
+              - "window" (default): User clicks to select a window to capture
+              - "rdp": Automatically capture FreeRDP window (no user interaction).
+                Raises window briefly, captures, then restores focus.
+              - "region": User draws rectangle to capture a screen region (flameshot)
+              - "annotate": Draw rectangle, then annotate with drawing tools,
+                arrows, text, highlights, blur before saving (flameshot)
+              - "full": Entire screen
+        delay: Seconds to wait before capturing (default 5, min 0, max 30).
+              Ignored for "rdp" mode.
+        restore: For "rdp" mode - how to handle focus after capture:
+              - "focus" (default): Return focus to the original window
+              - "lower": Push RDP window behind other windows
+              - "none": Leave RDP window raised/focused
 
-USE when the user asks to:
-- See what's on their screen
-- Capture a screenshot of a window or application
-- Show a specific window or application
-- Analyze visual content on the display
-- Capture just a portion/region/area of the screen (use mode="region")
-- Annotate, draw, highlight, circle something, add arrows or text (use mode="annotate")
-- Capture the Windows RDP/remote desktop window automatically (use mode="rdp")
-
-DO NOT use for:
-- Terminal text content (inefficient for text)
-- Wayland sessions (X11 only)
-- Headless/SSH environments (requires display)
-
-Args:
-    mode: Capture mode:
-          - "window" (default): User clicks to select a window to capture
-          - "rdp": Automatically capture FreeRDP window showing a (mostly Windows) 
-            remote desktop (no user interaction). Raises window briefly, captures, 
-            then restores focus. Use when capturing Windows desktop/applications 
-            via RDP without clicking.
-          - "region": User draws rectangle to capture a screen region (uses flameshot)
-          - "annotate": User draws rectangle, then can annotate with drawing tools,
-            arrows, text, highlights, blur, etc. before saving (uses flameshot).
-            Best when user wants to mark up, explain, or emphasize something visually.
-          - "full": Entire screen - only use if user explicitly requests it
-    delay: Seconds to wait before capturing (default 5, min 0, max 30).
-          Ignored for "rdp" mode (automatic capture has no delay).
-    restore: For "rdp" mode only - how to handle focus after capture:
-          - "focus" (default): Return focus to the original window
-          - "lower": Push RDP window behind other windows
-          - "none": Leave RDP window raised/focused
-
-Returns:
-    ToolOutput with the screenshot as an attachment.
-"""
+    Returns:
+        ToolOutput with screenshot as PNG attachment
+    """
     # Check dependencies
     dep_error = _check_dependencies()
     if dep_error:
