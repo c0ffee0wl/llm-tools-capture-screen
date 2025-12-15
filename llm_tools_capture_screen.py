@@ -304,6 +304,10 @@ def capture_screen(mode: str = "window", delay: int = 5, restore: str = "focus")
     """
     Capture a screenshot of a window, region, or screen. Supports annotation/drawing.
 
+    Uses maim for capture and flameshot for region selection/annotation. Works on
+    X11-based Linux systems only (Debian/Ubuntu/Kali/XFCE). The delay parameter
+    gives users time to arrange windows before capture begins.
+
     Args:
         mode: Capture mode:
               - "window" (default): User clicks to select a window to capture
