@@ -237,6 +237,94 @@ def _capture_app(
         return str(e)
 
 
+def _capture_window_id(
+    output_path: str,
+    window_id: str,
+    restore: str = "focus"
+) -> Optional[str]:
+    """Capture a specific window by X11 window ID (no user interaction).
+
+    Args:
+        output_path: Path to save the screenshot
+        window_id: X11 window ID (hex format like "0x2a00003" or decimal)
+        restore: How to handle window focus after capture:
+            - "focus": Bring window to front before capture (default)
+            - "none": Capture as-is (may be obscured by other windows)
+
+    Returns:
+        Error message string, or None on success.
+    """
+    if not shutil.which('xdotool'):
+        return "xdotool not installed. Install with: sudo apt install xdotool"
+
+    original_window = None
+
+    try:
+        # Convert hex to decimal if needed
+        if window_id.startswith('0x'):
+            window_id_dec = str(int(window_id, 16))
+        else:
+            window_id_dec = window_id
+
+        # Verify window exists
+        verify_result = subprocess.run(
+            ['xdotool', 'getwindowname', window_id_dec],
+            capture_output=True,
+            timeout=5
+        )
+        if verify_result.returncode != 0:
+            return f"Window {window_id} not found or inaccessible"
+
+        if restore == "focus":
+            # Save current active window before any changes
+            try:
+                result = subprocess.run(
+                    ['xdotool', 'getactivewindow'],
+                    capture_output=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    original_window = result.stdout.decode().strip()
+            except Exception:
+                pass
+
+            # Bring target window to front
+            activate_result = subprocess.run(
+                ['xdotool', 'windowactivate', '--sync', window_id_dec],
+                capture_output=True,
+                timeout=5
+            )
+            if activate_result.returncode != 0:
+                return f"Failed to activate window {window_id}"
+            time.sleep(0.3)  # Brief pause for window to render
+
+        # Capture the window (maim -i works even if window is partially obscured)
+        result = subprocess.run(
+            ['maim', '-i', window_id_dec, output_path],
+            capture_output=True,
+            timeout=10
+        )
+        if result.returncode != 0:
+            return result.stderr.decode().strip() or "maim capture failed"
+
+        # Restore original window focus if we changed it
+        if restore == "focus" and original_window:
+            subprocess.run(
+                ['xdotool', 'windowactivate', '--sync', original_window],
+                capture_output=True,
+                timeout=5
+            )
+
+        return None
+
+    except subprocess.TimeoutExpired:
+        return "Window ID capture timed out"
+    except ValueError:
+        return f"Invalid window ID format: {window_id}"
+    except Exception as e:
+        return str(e)
+
+
 def _capture_rdp(output_path: str, restore: str = "focus") -> Optional[str]:
     """Capture Windows desktop via FreeRDP window automatically.
 
@@ -300,7 +388,12 @@ def _capture_rdp(output_path: str, restore: str = "focus") -> Optional[str]:
     return error
 
 
-def capture_screen(mode: str = "window", delay: int = 5, restore: str = "focus") -> llm.ToolOutput:
+def capture_screen(
+    mode: str = "window",
+    delay: int = 5,
+    restore: str = "focus",
+    window_id: str = None
+) -> llm.ToolOutput:
     """
     Capture a screenshot of a window, region, or screen. Supports annotation/drawing.
 
@@ -311,6 +404,8 @@ def capture_screen(mode: str = "window", delay: int = 5, restore: str = "focus")
     Args:
         mode: Capture mode:
               - "window" (default): User clicks to select a window to capture
+              - "window_id": Capture a specific window by X11 ID (no user interaction).
+                Requires window_id parameter. Use with IDs from <gui_context>.
               - "rdp": Automatically capture FreeRDP window (no user interaction).
                 Raises window briefly, captures, then restores focus.
               - "region": User draws rectangle to capture a screen region (flameshot)
@@ -318,11 +413,13 @@ def capture_screen(mode: str = "window", delay: int = 5, restore: str = "focus")
                 arrows, text, highlights, blur before saving (flameshot)
               - "full": Entire screen
         delay: Seconds to wait before capturing (default 5, min 0, max 30).
-              Ignored for "rdp" mode.
-        restore: For "rdp" mode - how to handle focus after capture:
-              - "focus" (default): Return focus to the original window
-              - "lower": Push RDP window behind other windows
-              - "none": Leave RDP window raised/focused
+              Ignored for "rdp" and "window_id" modes.
+        restore: How to handle focus after capture (for "rdp" and "window_id" modes):
+              - "focus" (default): Bring window to front, capture, restore original focus
+              - "lower": Push target window behind other windows (rdp only)
+              - "none": Capture window as-is without changing focus (may be obscured)
+        window_id: X11 window ID for "window_id" mode (hex like "0x2a00003" or decimal).
+              Get window IDs from <gui_context> block in conversation.
 
     Returns:
         ToolOutput with screenshot as PNG attachment
@@ -340,12 +437,18 @@ def capture_screen(mode: str = "window", delay: int = 5, restore: str = "focus")
         delay = 5  # Default if invalid
 
     # Validate mode
-    if mode not in ("full", "window", "region", "annotate", "rdp"):
+    if mode not in ("full", "window", "window_id", "region", "annotate", "rdp"):
         mode = "window"
 
     # Validate restore parameter
     if restore not in ("focus", "lower", "none"):
         restore = "focus"
+
+    # Validate window_id for window_id mode
+    if mode == "window_id" and not window_id:
+        raise Exception("window_id parameter required for mode='window_id'")
+    if mode == "window_id" and restore == "lower":
+        restore = "focus"  # 'lower' not supported for window_id mode
 
     # Create temp file
     temp_fd, temp_path = tempfile.mkstemp(suffix='.png', prefix='llm_screenshot_')
@@ -355,6 +458,8 @@ def capture_screen(mode: str = "window", delay: int = 5, restore: str = "focus")
         # Capture based on mode
         if mode == "window":
             error = _capture_window(temp_path, delay=delay)
+        elif mode == "window_id":
+            error = _capture_window_id(temp_path, window_id=window_id, restore=restore)
         elif mode == "rdp":
             error = _capture_rdp(temp_path, restore=restore)
         elif mode == "region":
@@ -379,8 +484,10 @@ def capture_screen(mode: str = "window", delay: int = 5, restore: str = "focus")
             "mode": mode,
             "path": temp_path
         }
-        if mode != "rdp":
+        if mode not in ("rdp", "window_id"):
             result["delay"] = delay
+        if mode == "window_id":
+            result["window_id"] = window_id
 
         return llm.ToolOutput(
             output=result,
